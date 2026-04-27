@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🔒 Secure Chat</title>
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      justify-content: center;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+    }
+
+    .container {
+      display: flex;
+      gap: 20px;
+    }
+
+    #chat-box, #enc-box {
+      width: 350px;
+      height: 400px;
+      border: 2px solid #0f0;
+      overflow-y: auto;
+      padding: 10px;
+      border-radius: 8px;
+      background: #000;
+    }
+
+    #enc-box {
+      border-color: #0ff;
+    }
+
+    #msg {
+      width: 500px;
+      padding: 8px;
+      border-radius: 4px;
+      border: none;
+    }
+
+    button {
+      padding: 8px 12px;
+      background: #0f0;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      margin-left: 10px;
+    }
+
+    .msg {
+      margin: 5px 0;
+    }
+
+    .me {
+      color: #0f0;
+    }
+
+    .encrypted {
+      color: #0ff;
+    }
+  </style>
+</head>
+<body>
+  <h2>🔒 Secure Chat</h2>
+
+  <div class="container">
+    <div>
+      <h3>💬 Decrypted Messages</h3>
+      <div id="chat-box"></div>
+    </div>
+
+    <div>
+      <h3>🔐 Encrypted Data</h3>
+      <div id="enc-box"></div>
+    </div>
+  </div>
+
+  <div style="margin-top: 15px;">
+    <input type="text" id="msg" placeholder="Type your message..." />
+    <button onclick="sendMessage()">Send</button>
+  </div>
+
+  <script>
+    const FIXED_KEY = '1234567890abcdef';
+    const ws = new WebSocket("ws://172.18.12.14:8080/chat"); // server IP
+
+    const chatBox = document.getElementById('chat-box');
+    const encBox = document.getElementById('enc-box');
+
+    let lastSentEncrypted = ""; // prevent double encryption display
+
+    ws.onmessage = async (event) => {
+      const encrypted = event.data;
+
+      // Skip showing if it’s the same one we just sent
+      if (encrypted === lastSentEncrypted) return;
+
+      encBox.innerHTML += `<p class='encrypted'>🔒 ${encrypted}</p>`;
+
+      const decrypted = await decryptAES(encrypted);
+      chatBox.innerHTML += `<p>💬 ${decrypted}</p>`;
+    };
+
+    async function encryptAES(text) {
+      const enc = new TextEncoder();
+      const keyData = enc.encode(FIXED_KEY);
+      const key = await crypto.subtle.importKey("raw", keyData, "AES-CBC", false, ["encrypt"]);
+      const iv = new Uint8Array(16);
+      const encrypted = await crypto.subtle.encrypt({ name: "AES-CBC", iv }, key, enc.encode(text));
+      return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+    }
+
+    async function decryptAES(encryptedText) {
+      try {
+        const data = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
+        const keyData = new TextEncoder().encode(FIXED_KEY);
+        const key = await crypto.subtle.importKey("raw", keyData, "AES-CBC", false, ["decrypt"]);
+        const iv = new Uint8Array(16);
+        const decrypted = await crypto.subtle.decrypt({ name: "AES-CBC", iv }, key, data);
+        return new TextDecoder().decode(decrypted);
+      } catch {
+        return "⚠️ Error decrypting message";
+      }
+    }
+
+    async function sendMessage() {
+      const msg = document.getElementById("msg").value.trim();
+      if (!msg) return;
+
+      const encrypted = await encryptAES(msg);
+      lastSentEncrypted = encrypted;
+
+      ws.send(encrypted);
+
+      // Show message locally
+      chatBox.innerHTML += `<p class='me'>You: ${msg}</p>`;
+      encBox.innerHTML += `<p class='encrypted'>🔒 ${encrypted}</p>`;
+
+      document.getElementById("msg").value = "";
+    }
+  </script>
+</body>
+</html>
