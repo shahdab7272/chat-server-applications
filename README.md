@@ -1,4 +1,4 @@
-# Chat Server Application
+## Chat Server Application
 
 ## 📌 Description
 A real-time chat server application that allows multiple users to connect and communicate simultaneously using socket programming.
